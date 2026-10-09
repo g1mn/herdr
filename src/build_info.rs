@@ -10,13 +10,21 @@ pub fn build_id() -> Option<&'static str> {
     non_empty(option_env!("HERDR_BUILD_ID"))
 }
 
+pub fn build_flavor() -> Option<&'static str> {
+    non_empty(option_env!("HERDR_BUILD_FLAVOR"))
+}
+
 pub fn version() -> String {
-    match channel() {
+    let release = match channel() {
         "stable" => BASE_VERSION.to_string(),
         channel => match build_id() {
             Some(build_id) => format!("{BASE_VERSION}-{channel}.{build_id}"),
             None => format!("{BASE_VERSION}-{channel}"),
         },
+    };
+    match build_flavor() {
+        Some(flavor) => format!("{release}+{flavor}"),
+        None => release,
     }
 }
 
