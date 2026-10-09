@@ -401,6 +401,14 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # Milliseconds between automatic agent restores; 0 starts them without spacing.
 # startup_per_agent_delay_ms = 100
 
+# Extra CLI arguments inserted after the agent executable for native session
+# resume. Keys are strict canonical agent ids. Example:
+#   claude --dangerously-skip-permissions --resume <id>
+#   codex --yolo resume <id>
+# [session.resume_extra_args]
+# claude = ["--dangerously-skip-permissions"]
+# codex = ["--yolo"]
+
 [remote]
 # Whether herdr manages the ssh config used for `herdr --remote`.
 # When true (default), herdr runs remote ssh through a generated config that

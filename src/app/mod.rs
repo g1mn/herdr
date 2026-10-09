@@ -436,7 +436,10 @@ impl App {
                 config.advanced.scrollback_limit_bytes,
                 &config.terminal.default_shell,
                 config.terminal.shell_mode,
-                config.session.resume_agents_on_restore,
+                crate::persist::NativeAgentResumeOptions {
+                    enabled: config.session.resume_agents_on_restore,
+                    extra_args: &config.session.resume_extra_args,
+                },
                 event_tx.clone(),
                 render_notify.clone(),
                 render_dirty.clone(),
@@ -717,6 +720,10 @@ impl App {
             config.advanced.scrollback_limit_bytes,
             &config.terminal.default_shell,
             config.terminal.shell_mode,
+            crate::persist::NativeAgentResumeOptions {
+                enabled: true,
+                extra_args: &config.session.resume_extra_args,
+            },
             imports,
             app.event_tx.clone(),
             app.render_notify.clone(),
