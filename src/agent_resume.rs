@@ -38,16 +38,22 @@ pub struct ReportedAgentResume {
 impl ReportedAgentResume {
     /// The same command can name different sessions in different directories,
     /// for example `agent --continue`, so the directory is part of its identity.
-    pub fn plan(&self, cwd: &Path) -> AgentResumePlan {
+    /// Configured agent arguments are added after the executable.
+    pub fn plan_with_extra_args(&self, cwd: &Path, extra_args: &[String]) -> AgentResumePlan {
+        let mut argv = self.argv.clone();
+        if !extra_args.is_empty() && !argv.is_empty() {
+            argv.splice(1..1, extra_args.iter().cloned());
+        }
+
         AgentResumePlan {
             agent: self.agent.clone(),
-            argv: self.argv.clone(),
+            argv: argv.clone(),
             dedupe_key: format!(
                 "{}\u{0}{}\u{0}{}\u{0}argv\u{0}{}",
                 self.source,
                 self.agent,
                 cwd.display(),
-                self.argv.join("\u{0}")
+                argv.join("\u{0}")
             ),
         }
     }

@@ -834,7 +834,10 @@ fn pane_restore_startup<'a>(
     let restore_plan = if !agent_restore.enabled {
         None
     } else if let Some(resume) = reported_resume {
-        Some(reported_resume_from_snapshot(resume).plan(cwd))
+        Some(reported_resume_from_snapshot(resume).plan_with_extra_args(
+            cwd,
+            resume_extra_args_for_agent(resume.agent.as_str(), agent_restore.resume_extra_args),
+        ))
     } else {
         session.and_then(|session| {
             restore_plan_for_snapshot(session, true, agent_restore.resume_extra_args)
@@ -899,18 +902,23 @@ fn restore_plan_for_snapshot(
         return None;
     }
     let persisted = persisted_agent_session_from_snapshot(session)?;
-    // Look up by agent label; unknown keys are rejected at config load time.
-    let empty: &[String] = &[];
-    let extra = resume_extra_args
-        .get(session.agent.as_str())
-        .map(Vec::as_slice)
-        .unwrap_or(empty);
     crate::agent_resume::plan_with_extra_args(
         &session.source,
         &session.agent,
         &persisted.session_ref,
-        extra,
+        resume_extra_args_for_agent(session.agent.as_str(), resume_extra_args),
     )
+}
+
+fn resume_extra_args_for_agent<'a>(
+    agent: &str,
+    resume_extra_args: &'a BTreeMap<String, Vec<String>>,
+) -> &'a [String] {
+    // Unknown keys are rejected at config load time.
+    resume_extra_args
+        .get(agent)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
 }
 
 fn persisted_agent_session_from_snapshot(
