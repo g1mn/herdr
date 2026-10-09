@@ -185,7 +185,11 @@ impl App {
         let mut demand = GitStatusRefreshDemand::default();
         for token in self.state.sidebar_spaces.rows.iter().flatten() {
             match token.parts().0 {
+                // The working-tree change count rides on the branch refresh.
                 crate::config::SpaceSidebarToken::Branch => demand.branch = true,
+                crate::config::SpaceSidebarToken::Custom(name) if name == "git_changes" => {
+                    demand.branch = true
+                }
                 crate::config::SpaceSidebarToken::GitStatus => demand.ahead_behind = true,
                 _ => {}
             }
@@ -340,10 +344,12 @@ mod tests {
         let cached = GitStatusCacheEntry {
             fingerprint: None,
             retry_after: Some(Instant::now() + std::time::Duration::from_secs(30)),
+            changed_files_checked_at: None,
             snapshot: crate::workspace::WorkspaceGitStatusSnapshot {
                 auto_label: "/".into(),
                 branch: Some("main".into()),
                 ahead_behind: None,
+                changed_files: None,
                 space: Some(crate::workspace::GitSpaceMetadata {
                     key: "/.git".into(),
                     checkout_key: "/".into(),
@@ -429,10 +435,12 @@ mod tests {
         let cached = GitStatusCacheEntry {
             fingerprint: None,
             retry_after: None,
+            changed_files_checked_at: None,
             snapshot: crate::workspace::WorkspaceGitStatusSnapshot {
                 auto_label: "stale".into(),
                 branch: None,
                 ahead_behind: None,
+                changed_files: None,
                 space: None,
             },
         };
@@ -670,6 +678,13 @@ mod tests {
                 GitStatusRefreshDemand {
                     branch: false,
                     ahead_behind: true,
+                },
+            ),
+            (
+                crate::config::SpaceSidebarToken::Custom("git_changes".into()),
+                GitStatusRefreshDemand {
+                    branch: true,
+                    ahead_behind: false,
                 },
             ),
         ];

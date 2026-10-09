@@ -1370,7 +1370,7 @@ impl ClientShellState {
                 return;
             }
             if let Some(press) = self.workspace_press.take() {
-                self.finish_endpoint_workspace_press(press, outcome);
+                self.finish_endpoint_workspace_press(press, point, outcome);
                 return;
             }
             if let Some(press) = self.tab_press.take() {

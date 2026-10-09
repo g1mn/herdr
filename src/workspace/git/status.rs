@@ -35,6 +35,7 @@ impl GitStatusRefreshDemand {
 pub struct GitStatusCacheEntry {
     pub fingerprint: Option<GitStatusFingerprint>,
     pub retry_after: Option<Instant>,
+    pub changed_files_checked_at: Option<Instant>,
     pub snapshot: WorkspaceGitStatusSnapshot,
 }
 
@@ -46,6 +47,37 @@ pub struct GitStatusFingerprint {
 }
 
 type RepoContext = (GitWorktreeInfo, bool, Vec<FileDep>, Option<ConfigCtx>);
+
+fn changed_file_count(repo_root: &Path) -> Option<usize> {
+    let output = crate::noninteractive_process::command("git")
+        .arg("-C")
+        .arg(repo_root)
+        .args([
+            "-c",
+            "status.submoduleSummary=false",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=normal",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let mut fields = output.stdout.split(|byte| *byte == 0);
+    let mut count = 0;
+    while let Some(record) = fields.next().filter(|record| !record.is_empty()) {
+        if record.len() < 3 || record[2] != b' ' {
+            return None;
+        }
+        count += 1;
+        if matches!(record[0], b'R' | b'C') || matches!(record[1], b'R' | b'C') {
+            fields.next()?; // Rename/copy records include the original path.
+        }
+    }
+    Some(count)
+}
 
 fn repo_context(cwd: &Path) -> Option<RepoContext> {
     let info = git_worktree_info(cwd)?;
@@ -121,6 +153,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
             auto_label: fallback_label_from_cwd(cwd),
             branch: None,
             ahead_behind: None,
+            changed_files: None,
             space: None,
         };
         return (
@@ -128,12 +161,24 @@ pub fn git_status_snapshot_for_cwd_with_demand(
             Some(GitStatusCacheEntry {
                 fingerprint: None,
                 retry_after: Some(Instant::now() + Duration::from_secs(30)),
+                changed_files_checked_at: None,
                 snapshot,
             }),
         );
     };
     let auto_label = automatic_workspace_label(cwd, &repository_context.0.repo_root);
     let space = git_space_metadata_from_info(&repository_context.0);
+    let previous_changed_files = cached.filter(|entry| {
+        entry
+            .changed_files_checked_at
+            .is_some_and(|checked_at| checked_at.elapsed() < Duration::from_secs(5))
+    });
+    let changed_files = previous_changed_files
+        .map(|entry| entry.snapshot.changed_files)
+        .unwrap_or_else(|| changed_file_count(&repository_context.0.repo_root));
+    let changed_files_checked_at = previous_changed_files
+        .and_then(|entry| entry.changed_files_checked_at)
+        .or_else(|| Some(Instant::now()));
 
     if !demand.ahead_behind {
         let fingerprint = fingerprint(repository_context, false);
@@ -146,6 +191,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
             auto_label,
             branch,
             ahead_behind: None,
+            changed_files,
             space: Some(space),
         };
         return (
@@ -153,6 +199,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
             fingerprint.map(|fingerprint| GitStatusCacheEntry {
                 fingerprint: Some(fingerprint),
                 retry_after: None,
+                changed_files_checked_at,
                 snapshot,
             }),
         );
@@ -164,6 +211,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
                 auto_label,
                 branch: None,
                 ahead_behind: None,
+                changed_files,
                 space: Some(space),
             },
             None,
@@ -176,6 +224,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
             auto_label,
             branch,
             ahead_behind: cached.snapshot.ahead_behind,
+            changed_files,
             space: Some(space),
         };
         return (
@@ -183,6 +232,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
             Some(GitStatusCacheEntry {
                 fingerprint: Some(fingerprint),
                 retry_after: None,
+                changed_files_checked_at,
                 snapshot,
             }),
         );
@@ -196,6 +246,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
         auto_label,
         branch,
         ahead_behind,
+        changed_files,
         space: Some(space),
     };
     (
@@ -203,6 +254,7 @@ pub fn git_status_snapshot_for_cwd_with_demand(
         Some(GitStatusCacheEntry {
             fingerprint: Some(fingerprint),
             retry_after: None,
+            changed_files_checked_at,
             snapshot,
         }),
     )
@@ -455,10 +507,12 @@ mod tests {
         let cached = GitStatusCacheEntry {
             fingerprint: Some(fingerprint),
             retry_after: None,
+            changed_files_checked_at: None,
             snapshot: WorkspaceGitStatusSnapshot {
                 auto_label: "repo".into(),
                 branch: Some("main".into()),
                 ahead_behind: Some((2, 1)),
+                changed_files: None,
                 space: git_space_metadata(&root),
             },
         };
@@ -480,10 +534,12 @@ mod tests {
         let cached = GitStatusCacheEntry {
             fingerprint: Some(fingerprint),
             retry_after: None,
+            changed_files_checked_at: None,
             snapshot: WorkspaceGitStatusSnapshot {
                 auto_label: "repo".into(),
                 branch: Some("main".into()),
                 ahead_behind: Some((4, 0)),
+                changed_files: None,
                 space: git_space_metadata(&root),
             },
         };
@@ -515,10 +571,12 @@ mod tests {
         let cached = GitStatusCacheEntry {
             fingerprint: Some(fingerprint),
             retry_after: None,
+            changed_files_checked_at: None,
             snapshot: WorkspaceGitStatusSnapshot {
                 auto_label: "repo".into(),
                 branch: Some("main".into()),
                 ahead_behind: Some((0, 3)),
+                changed_files: None,
                 space: git_space_metadata(&root),
             },
         };

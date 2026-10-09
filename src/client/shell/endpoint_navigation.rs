@@ -33,8 +33,50 @@ impl ClientShellState {
     pub(super) fn finish_endpoint_workspace_press(
         &mut self,
         press: ClientWorkspacePress,
+        release_point: (u16, u16),
         outcome: &mut ClientShellInput,
     ) {
+        let clicked_changes = press.endpoint_id == self.active_endpoint_id
+            && press.endpoint_id.is_local()
+            && self.hits.workspaces.iter().any(|hit| {
+                hit.endpoint_id == press.endpoint_id
+                    && hit.workspace_id == press.workspace_id
+                    && hit.git_changes.is_some_and(|rect| {
+                        super::contains(rect, (press.start_column, press.start_row))
+                            && super::contains(rect, release_point)
+                    })
+            });
+        if clicked_changes {
+            let command_id = self
+                .snapshot
+                .as_deref()
+                .and_then(|snapshot| {
+                    snapshot.commands.iter().find(|command| {
+                        command.description.as_deref()
+                            == Some(crate::protocol::GIT_CHANGES_COMMAND_DESCRIPTION)
+                            && command.action == crate::protocol::ClientShellCommandAction::Popup
+                    })
+                })
+                .map(|command| command.command_id.clone())
+                .unwrap_or_else(|| crate::protocol::GIT_CHANGES_COMMAND_ID.to_owned());
+            let params = crate::api::schema::CommandInvokeParams {
+                command_id,
+                workspace_id: Some(press.workspace_id),
+                tab_id: None,
+                pane_id: None,
+                selection: None,
+            };
+            self.popup_pending = true;
+            self.popup_pending_deadline = None;
+            if !self.push_endpoint_method_with_kind(
+                crate::api::schema::Method::CommandInvoke(params),
+                PendingEndpointKind::PopupCommand,
+                outcome,
+            ) {
+                self.popup_pending = false;
+            }
+            return;
+        }
         self.focus_or_activate(
             press.endpoint_id,
             ClientEndpointFocusTarget::Workspace(press.workspace_id),

@@ -62,6 +62,9 @@ pub(super) fn snapshot_with_completions(
         .enumerate()
         .map(|(workspace_index, (workspace, state))| {
             let mut tokens = workspace.tokens.into_iter().collect::<Vec<_>>();
+            if let Some(count) = state.cached_git_changed_files.filter(|count| *count > 0) {
+                tokens.push(("git_changes".to_owned(), format!("●{count}")));
+            }
             tokens.sort_by(|left, right| left.0.cmp(&right.0));
             let workspace_id = workspace.workspace_id;
             let active_tab_id = location

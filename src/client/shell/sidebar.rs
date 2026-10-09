@@ -12,6 +12,38 @@ fn workspace_selection_background(palette: &Palette) -> ratatui::style::Color {
     }
 }
 
+pub(in crate::client::shell) fn git_changes_hit(
+    buffer: &Buffer,
+    area: Rect,
+    tokens: &[(String, String)],
+) -> Option<Rect> {
+    let badge = tokens
+        .iter()
+        .find(|(name, value)| {
+            name == "git_changes"
+                && value.strip_prefix('●').is_some_and(|count| {
+                    !count.is_empty() && count.bytes().all(|byte| byte.is_ascii_digit())
+                })
+        })?
+        .1
+        .as_str();
+    let width = u16::try_from(badge.chars().count()).ok()?;
+    if width > area.width {
+        return None;
+    }
+    for y in area.y..area.bottom() {
+        for x in (area.x..=area.right() - width).rev() {
+            if badge.chars().enumerate().all(|(offset, ch)| {
+                let mut symbol = buffer[(x + offset as u16, y)].symbol().chars();
+                symbol.next() == Some(ch) && symbol.next().is_none()
+            }) {
+                return Some(Rect::new(x, y, width, 1));
+            }
+        }
+    }
+    None
+}
+
 pub(in crate::client::shell) fn workspace_active_background(
     palette: &Palette,
     navigating: bool,
@@ -103,6 +135,7 @@ pub(crate) fn render_collapsed_sidebar(
         );
         hits.workspaces.push(WorkspaceHit {
             rect,
+            git_changes: None,
             endpoint_id: ClientEndpointId::Local,
             workspace_id: workspace.workspace_id.clone(),
             indented: false,
@@ -334,6 +367,7 @@ pub(crate) fn render_sidebar(
             dragged,
             palette,
         );
+        let git_changes = git_changes_hit(buffer, rect, &workspace.tokens);
         let group_toggle = render_parent_group_toggle(
             buffer,
             rect,
@@ -344,6 +378,7 @@ pub(crate) fn render_sidebar(
         );
         hits.workspaces.push(WorkspaceHit {
             rect,
+            git_changes,
             endpoint_id: ClientEndpointId::Local,
             workspace_id: workspace.workspace_id.clone(),
             indented: entry.indented,

@@ -188,6 +188,7 @@ pub(super) fn render_collapsed(
             );
             hits.workspaces.push(WorkspaceHit {
                 rect,
+                git_changes: None,
                 endpoint_id: endpoint.endpoint_id.clone(),
                 workspace_id: workspace.workspace_id.clone(),
                 indented: false,
@@ -481,6 +482,9 @@ pub(super) fn render_expanded(
                     false,
                     palette,
                 );
+                let git_changes = (endpoint.endpoint_id == *state.active_endpoint_id)
+                    .then(|| super::sidebar::git_changes_hit(buffer, nested, &workspace.tokens))
+                    .flatten();
                 if endpoint.status != ClientEndpointStatus::Online {
                     buffer.set_style(
                         rect,
@@ -499,6 +503,7 @@ pub(super) fn render_expanded(
                 );
                 hits.workspaces.push(WorkspaceHit {
                     rect,
+                    git_changes,
                     endpoint_id: endpoint.endpoint_id.clone(),
                     workspace_id: workspace.workspace_id.clone(),
                     indented: entry.indented,

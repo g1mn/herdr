@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 
 /// Current protocol version. Bumped when wire format changes incompatibly.
 pub const PROTOCOL_VERSION: u32 = 22;
+pub const GIT_CHANGES_COMMAND_ID: &str = "git.changes.open";
+pub const GIT_CHANGES_COMMAND_DESCRIPTION: &str = "Show Git changes";
 
 /// Maximum allowed frame payload size (2 MB). Frames larger than this are
 /// rejected to prevent denial-of-service via oversized length prefixes.

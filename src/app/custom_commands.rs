@@ -82,6 +82,31 @@ impl App {
         id: String,
         params: crate::api::schema::CommandInvokeParams,
     ) -> String {
+        if params.command_id == crate::protocol::GIT_CHANGES_COMMAND_ID {
+            if let Err((code, message)) = self.focus_client_shell_command_target(&params) {
+                return crate::app::api::responses::encode_error(id, code, message);
+            }
+            let result = self.spawn_popup_shell_command(
+                "git -c core.quotepath=false status --short --untracked-files=normal | less -R",
+                None,
+                self.custom_command_env().0,
+                crate::app::popup::PopupGeometry {
+                    width: Some(crate::popup_size::PopupSize::Percent(80)),
+                    height: Some(crate::popup_size::PopupSize::Percent(80)),
+                },
+            );
+            return match result {
+                Ok(()) => crate::app::api::responses::encode_success(
+                    id,
+                    crate::api::schema::ResponseResult::Ok {},
+                ),
+                Err(error) => crate::app::api::responses::encode_error(
+                    id,
+                    "command_failed",
+                    error.to_string(),
+                ),
+            };
+        }
         let Some(binding) = self.resolve_client_shell_command(&params.command_id) else {
             return crate::app::api::responses::encode_error(
                 id,
